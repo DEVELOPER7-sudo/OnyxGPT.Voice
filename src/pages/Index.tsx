@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Play, Square, Volume2, Settings2, Sparkles, AlertCircle } from 'lucide-react';
+import { Play, Square, Volume2, Settings2, Sparkles, AlertCircle, Download, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { useNavigate } from 'react-router-dom';
 import { ProviderSelector } from '@/components/ProviderSelector';
 import { VoiceSelector } from '@/components/VoiceSelector';
 import { SettingsPanel } from '@/components/SettingsPanel';
@@ -16,7 +17,9 @@ const HISTORY_KEY = 'onyxgpt-voice-history';
 
 export default function Index() {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   
   const [text, setText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -42,7 +45,7 @@ export default function Index() {
   // OpenAI instructions
   const [instructions, setInstructions] = useState('');
   
-  // ElevenLabs voice settings
+  // ElevenLabs voice settings (for display only, not sent to API)
   const [stability, setStability] = useState(0.5);
   const [similarityBoost, setSimilarityBoost] = useState(0.75);
   const [speed, setSpeed] = useState(1.0);
@@ -70,6 +73,7 @@ export default function Index() {
 
   const handleProviderChange = (newProvider: Provider) => {
     setProvider(newProvider);
+    setAudioBlob(null);
     // Reset voice to default for new provider
     if (newProvider === 'aws-polly') {
       setVoice('Joanna');
@@ -89,27 +93,34 @@ export default function Index() {
     const useProvider = overrideProvider || provider;
     const useVoice = overrideVoice || voice;
     
-    const options: Record<string, unknown> = {
-      provider: useProvider,
-      voice: useVoice,
-    };
-
+    // Build options exactly as per Puter.js docs
     if (useProvider === 'aws-polly') {
-      options.language = language;
-      options.engine = engine;
+      return {
+        provider: useProvider,
+        voice: useVoice,
+        language,
+        engine,
+      };
     } else if (useProvider === 'openai') {
-      options.model = model;
-      options.response_format = format;
+      const opts: Record<string, unknown> = {
+        provider: useProvider,
+        voice: useVoice,
+        model,
+        response_format: format,
+      };
       if (instructions.trim()) {
-        options.instructions = instructions;
+        opts.instructions = instructions;
       }
-    } else if (useProvider === 'elevenlabs') {
-      options.model = model;
-      options.output_format = format;
-      // Note: voice_settings removed as it can cause API errors with some configurations
+      return opts;
+    } else {
+      // ElevenLabs - exact format from docs, no extra options
+      return {
+        provider: 'elevenlabs',
+        model,
+        voice: useVoice,
+        output_format: format,
+      };
     }
-
-    return options;
   };
 
   const playAudio = async (
@@ -118,6 +129,8 @@ export default function Index() {
     historyId?: string
   ): Promise<HTMLAudioElement | null> => {
     try {
+      console.log('Calling puter.ai.txt2speech with:', { text: textToSpeak.substring(0, 50), options });
+      
       const audio = await window.puter.ai.txt2speech(
         textToSpeak,
         options as Parameters<typeof window.puter.ai.txt2speech>[1]
@@ -126,6 +139,17 @@ export default function Index() {
       audioRef.current = audio;
       if (historyId) {
         setCurrentPlayingId(historyId);
+      }
+      
+      // Try to get the blob for download
+      if (audio.src) {
+        try {
+          const response = await fetch(audio.src);
+          const blob = await response.blob();
+          setAudioBlob(blob);
+        } catch (e) {
+          console.log('Could not fetch audio blob for download');
+        }
       }
       
       audio.onplay = () => setIsPlaying(true);
@@ -151,10 +175,11 @@ export default function Index() {
       return audio;
     } catch (error) {
       console.error('TTS Error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorObj = error as { message?: string; error?: { message?: string } };
+      const errorMessage = errorObj?.error?.message || errorObj?.message || 'Unknown error occurred';
       toast({
         title: 'Synthesis failed',
-        description: `Failed to convert text to speech: ${errorMessage}`,
+        description: errorMessage,
         variant: 'destructive',
       });
       return null;
@@ -185,6 +210,7 @@ export default function Index() {
       audioRef.current.pause();
       audioRef.current = null;
     }
+    setAudioBlob(null);
 
     setIsLoading(true);
 
@@ -220,11 +246,37 @@ export default function Index() {
     setCurrentPlayingId(null);
   };
 
+  const handleDownload = () => {
+    if (!audioBlob) {
+      toast({
+        title: 'No audio to download',
+        description: 'Generate speech first before downloading.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const url = URL.createObjectURL(audioBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `onyxgpt-voice-${Date.now()}.mp3`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: 'Download started',
+      description: 'Your audio file is being downloaded.',
+    });
+  };
+
   const handleReplayHistory = async (item: HistoryItem) => {
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current = null;
     }
+    setAudioBlob(null);
 
     setIsLoading(true);
     const options = buildTTSOptions(item.provider, item.voice);
@@ -248,11 +300,11 @@ export default function Index() {
   const charPercentage = (charCount / MAX_CHARS) * 100;
 
   return (
-    <div className="min-h-screen bg-background bg-noise relative overflow-hidden">
+    <div className="min-h-screen bg-background bg-noise bg-grid relative overflow-hidden">
       {/* Background glow effects */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl animate-pulse-slow" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-accent/10 rounded-full blur-3xl animate-pulse-slow delay-1000" />
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/15 rounded-full blur-[100px] animate-pulse-slow" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-accent/15 rounded-full blur-[100px] animate-pulse-slow delay-1000" />
       </div>
 
       <div className="relative z-10 container mx-auto px-4 py-8 max-w-6xl">
@@ -260,18 +312,24 @@ export default function Index() {
         <motion.header
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-12"
+          className="flex items-center justify-between mb-8"
         >
-          <div className="flex items-center justify-center gap-3 mb-4">
+          <Button
+            variant="ghost"
+            onClick={() => navigate('/')}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back
+          </Button>
+          <div className="flex items-center gap-3">
             <div className="relative">
-              <Volume2 className="w-12 h-12 text-primary" />
-              <Sparkles className="w-5 h-5 text-accent absolute -top-1 -right-1" />
+              <Volume2 className="w-10 h-10 text-primary" />
+              <Sparkles className="w-4 h-4 text-accent absolute -top-1 -right-1" />
             </div>
-            <h1 className="text-5xl font-bold text-gradient">OnyxGPT.Voice</h1>
+            <h1 className="text-3xl font-bold text-gradient">OnyxGPT.Voice</h1>
           </div>
-          <p className="text-muted-foreground text-lg">
-            Transform text into natural speech with AI-powered voices
-          </p>
+          <div className="w-20" />
         </motion.header>
 
         <div className="grid lg:grid-cols-3 gap-8">
@@ -349,12 +407,13 @@ export default function Index() {
                       initial={{ scale: 0.8, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       exit={{ scale: 0.8, opacity: 0 }}
+                      className="flex gap-3"
                     >
                       <Button
                         size="lg"
                         onClick={handleSpeak}
                         disabled={isLoading || !text.trim()}
-                        className="h-14 px-8 text-lg font-semibold glow-primary bg-primary hover:bg-primary/90"
+                        className="h-14 px-8 text-lg font-semibold glow-primary bg-primary text-primary-foreground hover:bg-primary/90"
                       >
                         {isLoading ? (
                           <>
@@ -372,6 +431,17 @@ export default function Index() {
                           </>
                         )}
                       </Button>
+                      {audioBlob && (
+                        <Button
+                          size="lg"
+                          variant="outline"
+                          onClick={handleDownload}
+                          className="h-14 px-6 border-primary/50 text-primary hover:bg-primary/10"
+                        >
+                          <Download className="w-5 h-5 mr-2" />
+                          Download
+                        </Button>
+                      )}
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -462,23 +532,13 @@ export default function Index() {
                     <strong className="text-foreground">Powered by Puter.js</strong> - Uses AI providers including OpenAI, ElevenLabs, and AWS Polly.
                   </p>
                   <p>
-                    Different providers offer unique voice characteristics and customization options.
+                    Different providers offer unique voice characteristics.
                   </p>
                 </div>
               </div>
             </div>
           </motion.div>
         </div>
-
-        {/* Footer */}
-        <motion.footer
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-          className="text-center mt-12 text-sm text-muted-foreground"
-        >
-          Built with Puter.js Text-to-Speech API
-        </motion.footer>
       </div>
     </div>
   );

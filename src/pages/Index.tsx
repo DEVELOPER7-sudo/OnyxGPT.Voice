@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Play, Square, Volume2, Settings2, Sparkles, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -8,9 +8,11 @@ import { ProviderSelector } from '@/components/ProviderSelector';
 import { VoiceSelector } from '@/components/VoiceSelector';
 import { SettingsPanel } from '@/components/SettingsPanel';
 import { WaveformVisualizer } from '@/components/WaveformVisualizer';
+import { HistoryPanel, type HistoryItem } from '@/components/HistoryPanel';
 import type { Provider } from '@/lib/tts-config';
 
 const MAX_CHARS = 3000;
+const HISTORY_KEY = 'onyxgpt-voice-history';
 
 export default function Index() {
   const { toast } = useToast();
@@ -20,6 +22,10 @@ export default function Index() {
   const [isLoading, setIsLoading] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [currentPlayingId, setCurrentPlayingId] = useState<string | null>(null);
+  
+  // History
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   
   // Provider & Voice
   const [provider, setProvider] = useState<Provider>('openai');
@@ -41,6 +47,27 @@ export default function Index() {
   const [similarityBoost, setSimilarityBoost] = useState(0.75);
   const [speed, setSpeed] = useState(1.0);
 
+  // Load history from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem(HISTORY_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setHistory(parsed.map((item: HistoryItem) => ({
+          ...item,
+          timestamp: new Date(item.timestamp),
+        })));
+      } catch {
+        console.error('Failed to parse history');
+      }
+    }
+  }, []);
+
+  // Save history to localStorage
+  useEffect(() => {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  }, [history]);
+
   const handleProviderChange = (newProvider: Provider) => {
     setProvider(newProvider);
     // Reset voice to default for new provider
@@ -55,6 +82,82 @@ export default function Index() {
       setVoice('21m00Tcm4TlvDq8ikWAM');
       setModel('eleven_multilingual_v2');
       setFormat('mp3_44100_128');
+    }
+  };
+
+  const buildTTSOptions = (overrideProvider?: Provider, overrideVoice?: string) => {
+    const useProvider = overrideProvider || provider;
+    const useVoice = overrideVoice || voice;
+    
+    const options: Record<string, unknown> = {
+      provider: useProvider,
+      voice: useVoice,
+    };
+
+    if (useProvider === 'aws-polly') {
+      options.language = language;
+      options.engine = engine;
+    } else if (useProvider === 'openai') {
+      options.model = model;
+      options.response_format = format;
+      if (instructions.trim()) {
+        options.instructions = instructions;
+      }
+    } else if (useProvider === 'elevenlabs') {
+      options.model = model;
+      options.output_format = format;
+      // Note: voice_settings removed as it can cause API errors with some configurations
+    }
+
+    return options;
+  };
+
+  const playAudio = async (
+    textToSpeak: string,
+    options: Record<string, unknown>,
+    historyId?: string
+  ): Promise<HTMLAudioElement | null> => {
+    try {
+      const audio = await window.puter.ai.txt2speech(
+        textToSpeak,
+        options as Parameters<typeof window.puter.ai.txt2speech>[1]
+      );
+      
+      audioRef.current = audio;
+      if (historyId) {
+        setCurrentPlayingId(historyId);
+      }
+      
+      audio.onplay = () => setIsPlaying(true);
+      audio.onended = () => {
+        setIsPlaying(false);
+        setCurrentPlayingId(null);
+      };
+      audio.onpause = () => {
+        setIsPlaying(false);
+        setCurrentPlayingId(null);
+      };
+      audio.onerror = () => {
+        setIsPlaying(false);
+        setCurrentPlayingId(null);
+        toast({
+          title: 'Playback error',
+          description: 'Failed to play the audio.',
+          variant: 'destructive',
+        });
+      };
+
+      await audio.play();
+      return audio;
+    } catch (error) {
+      console.error('TTS Error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      toast({
+        title: 'Synthesis failed',
+        description: `Failed to convert text to speech: ${errorMessage}`,
+        variant: 'destructive',
+      });
+      return null;
     }
   };
 
@@ -85,54 +188,23 @@ export default function Index() {
 
     setIsLoading(true);
 
+    const options = buildTTSOptions();
+    const newHistoryId = crypto.randomUUID();
+
     try {
-      const options: Record<string, unknown> = {
-        provider,
-        voice,
-      };
-
-      if (provider === 'aws-polly') {
-        options.language = language;
-        options.engine = engine;
-      } else if (provider === 'openai') {
-        options.model = model;
-        options.response_format = format;
-        if (instructions.trim()) {
-          options.instructions = instructions;
-        }
-      } else if (provider === 'elevenlabs') {
-        options.model = model;
-        options.output_format = format;
-        options.voice_settings = {
-          stability,
-          similarity_boost: similarityBoost,
-          speed,
-        };
-      }
-
-      const audio = await window.puter.ai.txt2speech(text, options as Parameters<typeof window.puter.ai.txt2speech>[1]);
-      audioRef.current = audio;
+      const audio = await playAudio(text, options, newHistoryId);
       
-      audio.onplay = () => setIsPlaying(true);
-      audio.onended = () => setIsPlaying(false);
-      audio.onpause = () => setIsPlaying(false);
-      audio.onerror = () => {
-        setIsPlaying(false);
-        toast({
-          title: 'Playback error',
-          description: 'Failed to play the audio.',
-          variant: 'destructive',
-        });
-      };
-
-      await audio.play();
-    } catch (error) {
-      console.error('TTS Error:', error);
-      toast({
-        title: 'Synthesis failed',
-        description: error instanceof Error ? error.message : 'Failed to convert text to speech.',
-        variant: 'destructive',
-      });
+      if (audio) {
+        // Add to history
+        const newHistoryItem: HistoryItem = {
+          id: newHistoryId,
+          text: text.trim(),
+          provider,
+          voice,
+          timestamp: new Date(),
+        };
+        setHistory((prev) => [newHistoryItem, ...prev].slice(0, 50)); // Keep last 50
+      }
     } finally {
       setIsLoading(false);
     }
@@ -145,6 +217,31 @@ export default function Index() {
       audioRef.current = null;
     }
     setIsPlaying(false);
+    setCurrentPlayingId(null);
+  };
+
+  const handleReplayHistory = async (item: HistoryItem) => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+
+    setIsLoading(true);
+    const options = buildTTSOptions(item.provider, item.voice);
+
+    try {
+      await playAudio(item.text, options, item.id);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteHistory = (id: string) => {
+    setHistory((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const handleClearHistory = () => {
+    setHistory([]);
   };
 
   const charCount = text.length;
@@ -158,7 +255,7 @@ export default function Index() {
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-accent/10 rounded-full blur-3xl animate-pulse-slow delay-1000" />
       </div>
 
-      <div className="relative z-10 container mx-auto px-4 py-8 max-w-5xl">
+      <div className="relative z-10 container mx-auto px-4 py-8 max-w-6xl">
         {/* Header */}
         <motion.header
           initial={{ opacity: 0, y: -20 }}
@@ -282,13 +379,14 @@ export default function Index() {
             </div>
           </motion.div>
 
-          {/* Settings Panel */}
+          {/* Sidebar */}
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2 }}
             className="space-y-6"
           >
+            {/* Settings Panel */}
             <div className="gradient-border rounded-2xl p-6 bg-card">
               <button
                 onClick={() => setShowSettings(!showSettings)}
@@ -344,6 +442,16 @@ export default function Index() {
                 )}
               </AnimatePresence>
             </div>
+
+            {/* History Panel */}
+            <HistoryPanel
+              items={history}
+              onReplay={handleReplayHistory}
+              onDelete={handleDeleteHistory}
+              onClear={handleClearHistory}
+              isPlaying={isPlaying}
+              currentPlayingId={currentPlayingId}
+            />
 
             {/* Info Card */}
             <div className="rounded-2xl p-6 bg-secondary/30 border border-border">

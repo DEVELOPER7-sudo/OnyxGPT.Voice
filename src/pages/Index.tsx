@@ -123,11 +123,45 @@ export default function Index() {
     }
   };
 
+  // Play audio from cached URL (no API call)
+  const playCachedAudio = async (audioUrl: string, historyId: string): Promise<boolean> => {
+    try {
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+      setCurrentPlayingId(historyId);
+      
+      audio.onplay = () => setIsPlaying(true);
+      audio.onended = () => {
+        setIsPlaying(false);
+        setCurrentPlayingId(null);
+      };
+      audio.onpause = () => {
+        setIsPlaying(false);
+        setCurrentPlayingId(null);
+      };
+      audio.onerror = () => {
+        setIsPlaying(false);
+        setCurrentPlayingId(null);
+        toast({
+          title: 'Playback error',
+          description: 'Cached audio failed. Try regenerating.',
+          variant: 'destructive',
+        });
+      };
+
+      await audio.play();
+      return true;
+    } catch (error) {
+      console.error('Cached playback error:', error);
+      return false;
+    }
+  };
+
   const playAudio = async (
     textToSpeak: string,
     options: Record<string, unknown>,
     historyId?: string
-  ): Promise<HTMLAudioElement | null> => {
+  ): Promise<{ audio: HTMLAudioElement; blobUrl: string } | null> => {
     try {
       console.log('Calling puter.ai.txt2speech with:', { text: textToSpeak.substring(0, 50), options });
       
@@ -141,14 +175,17 @@ export default function Index() {
         setCurrentPlayingId(historyId);
       }
       
-      // Try to get the blob for download
+      // Get the blob URL for caching and download
+      let blobUrl = '';
       if (audio.src) {
         try {
           const response = await fetch(audio.src);
           const blob = await response.blob();
+          blobUrl = URL.createObjectURL(blob);
           setAudioBlob(blob);
         } catch (e) {
-          console.log('Could not fetch audio blob for download');
+          console.log('Could not fetch audio blob');
+          blobUrl = audio.src;
         }
       }
       
@@ -172,7 +209,7 @@ export default function Index() {
       };
 
       await audio.play();
-      return audio;
+      return { audio, blobUrl };
     } catch (error) {
       console.error('TTS Error:', error);
       const errorObj = error as { message?: string; error?: { message?: string } };
@@ -218,18 +255,19 @@ export default function Index() {
     const newHistoryId = crypto.randomUUID();
 
     try {
-      const audio = await playAudio(text, options, newHistoryId);
+      const result = await playAudio(text, options, newHistoryId);
       
-      if (audio) {
-        // Add to history
+      if (result) {
+        // Add to history with cached audio URL
         const newHistoryItem: HistoryItem = {
           id: newHistoryId,
           text: text.trim(),
           provider,
           voice,
           timestamp: new Date(),
+          audioUrl: result.blobUrl, // Cache the audio URL
         };
-        setHistory((prev) => [newHistoryItem, ...prev].slice(0, 50)); // Keep last 50
+        setHistory((prev) => [newHistoryItem, ...prev].slice(0, 50));
       }
     } finally {
       setIsLoading(false);
@@ -272,28 +310,79 @@ export default function Index() {
   };
 
   const handleReplayHistory = async (item: HistoryItem) => {
+    // Stop any existing audio
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current = null;
     }
-    setAudioBlob(null);
 
+    // If we have cached audio, use it directly (no API call)
+    if (item.audioUrl) {
+      await playCachedAudio(item.audioUrl, item.id);
+      return;
+    }
+
+    // No cache - need to regenerate
+    setAudioBlob(null);
     setIsLoading(true);
     const options = buildTTSOptions(item.provider, item.voice);
 
     try {
-      await playAudio(item.text, options, item.id);
+      const result = await playAudio(item.text, options, item.id);
+      
+      // Update history item with cached audio URL
+      if (result) {
+        setHistory((prev) => 
+          prev.map((h) => 
+            h.id === item.id ? { ...h, audioUrl: result.blobUrl } : h
+          )
+        );
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleDeleteHistory = (id: string) => {
+    // Revoke blob URL to free memory
+    const item = history.find((h) => h.id === id);
+    if (item?.audioUrl) {
+      URL.revokeObjectURL(item.audioUrl);
+    }
     setHistory((prev) => prev.filter((item) => item.id !== id));
   };
 
   const handleClearHistory = () => {
+    // Revoke all blob URLs
+    history.forEach((item) => {
+      if (item.audioUrl) {
+        URL.revokeObjectURL(item.audioUrl);
+      }
+    });
     setHistory([]);
+  };
+
+  const handleDownloadFromHistory = (item: HistoryItem) => {
+    if (!item.audioUrl) {
+      toast({
+        title: 'No audio available',
+        description: 'Play this item first to cache the audio.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const a = document.createElement('a');
+    a.href = item.audioUrl;
+    a.download = `onyxgpt-${item.provider}-${Date.now()}.mp3`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    toast({
+      title: 'Download started',
+      description: 'Your audio file is being downloaded.',
+    });
   };
 
   const charCount = text.length;
@@ -519,6 +608,8 @@ export default function Index() {
               onReplay={handleReplayHistory}
               onDelete={handleDeleteHistory}
               onClear={handleClearHistory}
+              onDownload={handleDownloadFromHistory}
+              onStop={handleStop}
               isPlaying={isPlaying}
               currentPlayingId={currentPlayingId}
             />

@@ -1,6 +1,7 @@
 import { getVoicesForProvider, type Provider } from '@/lib/tts-config';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { User, Mic } from 'lucide-react';
+import { CustomVoiceInput } from './CustomVoiceInput';
 
 interface VoiceSelectorProps {
   provider: Provider;
@@ -21,7 +22,7 @@ export function VoiceSelector({ provider, value, onChange }: VoiceSelectorProps)
         <SelectTrigger className="w-full bg-card border-border h-12">
           <SelectValue placeholder="Select a voice" />
         </SelectTrigger>
-        <SelectContent className="bg-card border-border">
+        <SelectContent className="bg-card border-border max-h-64">
           {voices.map((voice) => (
             <SelectItem key={voice.value} value={voice.value} className="focus:bg-primary/20">
               <div className="flex items-center gap-2">
@@ -38,6 +39,9 @@ export function VoiceSelector({ provider, value, onChange }: VoiceSelectorProps)
           ))}
         </SelectContent>
       </Select>
+      
+      {/* Custom Voice ID Input for ElevenLabs */}
+      <CustomVoiceInput value={value} onChange={onChange} provider={provider} />
     </div>
   );
 }

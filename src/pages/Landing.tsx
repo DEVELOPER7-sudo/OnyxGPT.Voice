@@ -1,8 +1,10 @@
 import { motion } from 'framer-motion';
-import { Volume2, Sparkles, Zap, Globe, Mic2, ArrowRight, Wand2, Waves } from 'lucide-react';
+import { Sparkles, Zap, Globe, Mic2, ArrowRight, Wand2, Waves, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
-
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { InstallPWA } from '@/components/InstallPWA';
+import logo from '@/assets/logo.png';
 const features = [
   {
     icon: Zap,
@@ -65,18 +67,23 @@ export default function Landing() {
           animate={{ opacity: 1, y: 0 }}
           className="flex items-center justify-between py-4"
         >
-          <div className="flex items-center gap-2">
-            <Volume2 className="w-8 h-8 text-primary" />
+          <div className="flex items-center gap-3">
+            <img src={logo} alt="OnyxGPT" className="w-10 h-10 rounded-lg" />
             <span className="text-xl font-bold text-gradient">OnyxGPT.Voice</span>
           </div>
-          <Button 
-            onClick={() => navigate('/app')}
-            className="bg-primary/20 text-primary border border-primary/50 hover:bg-primary hover:text-primary-foreground"
-          >
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Button 
+              onClick={() => navigate('/app')}
+              className="bg-primary/20 text-primary border border-primary/50 hover:bg-primary hover:text-primary-foreground"
+            >
             Launch App
-            <ArrowRight className="w-4 h-4 ml-2" />
-          </Button>
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+          </div>
         </motion.header>
+        
+        <InstallPWA />
 
         {/* Hero Section */}
         <section className="py-20 lg:py-32">
@@ -123,7 +130,7 @@ export default function Landing() {
                 onClick={() => navigate('/app')}
                 className="h-14 px-8 text-lg font-semibold glow-primary bg-primary text-primary-foreground hover:bg-primary/90"
               >
-                <Volume2 className="w-5 h-5 mr-2" />
+                <Mic2 className="w-5 h-5 mr-2" />
                 Start Speaking
               </Button>
               <Button

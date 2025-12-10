@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Sparkles, Zap, Globe, Mic2, ArrowRight, Wand2, Waves, Download } from 'lucide-react';
+import { Sparkles, Zap, Globe, Mic2, ArrowRight, Wand2, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -132,14 +132,6 @@ export default function Landing() {
               >
                 <Mic2 className="w-5 h-5 mr-2" />
                 Start Speaking
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="h-14 px-8 text-lg border-primary/50 text-primary hover:bg-primary/10"
-              >
-                <Waves className="w-5 h-5 mr-2" />
-                Listen to Samples
               </Button>
             </motion.div>
 

@@ -17,8 +17,8 @@ export default defineConfig(({ mode }) => ({
       registerType: "autoUpdate",
       includeAssets: ["logo-192.png", "logo-512.png"],
       manifest: {
-        name: "OnyxGPT Voice - AI Text to Speech",
-        short_name: "OnyxGPT",
+        name: "OnyxGPT.Voice - AI Text to Speech",
+        short_name: "OnyxGPT.Voice",
         description: "Convert text to natural speech with AI-powered voices",
         theme_color: "#0891b2",
         background_color: "#0a0a0a",

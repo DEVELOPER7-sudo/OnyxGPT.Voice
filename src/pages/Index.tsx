@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Play, Square, Volume2, Settings2, Sparkles, AlertCircle, Download, ArrowLeft } from 'lucide-react';
+import { Play, Square, Settings2, AlertCircle, Download, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
@@ -444,10 +444,7 @@ export default function Index() {
             Back
           </Button>
           <div className="flex items-center gap-3">
-            <div className="relative">
-              <Volume2 className="w-10 h-10 text-primary" />
-              <Sparkles className="w-4 h-4 text-accent absolute -top-1 -right-1" />
-            </div>
+            <img src="/logo-192.png" alt="OnyxGPT.Voice" className="w-10 h-10 rounded-lg" />
             <h1 className="text-3xl font-bold text-gradient">OnyxGPT.Voice</h1>
           </div>
           <div className="flex items-center gap-2">

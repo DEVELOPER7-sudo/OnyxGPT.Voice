@@ -1,73 +1,77 @@
-# Welcome to your Lovable project
+# OnyxGPT.Voice
 
-## Project info
+**OnyxGPT.Voice** is a multi-provider AI voice generation application powered by the **Puter.js AI API**, allowing you to generate speech from text using several major voice engines without managing individual provider accounts or API keys.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+All provider access is routed through Puter, so setup is minimal and unified.
 
-## How can I edit this code?
+---
 
-There are several ways of editing your application.
+## Features
 
-**Use Lovable**
+- Multi-provider voice generation via a single API
+- No API keys required for individual providers
+- Unified interface for all supported engines
+- Support for multiple voice models and styles
+- Streaming and non-streaming generation modes
+- Output formats: MP3, WAV (provider-dependent)
+- Web and Node.js friendly
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+---
 
-Changes made via Lovable will be committed automatically to this repo.
+## Supported Providers (via Puter)
 
-**Use your preferred IDE**
+| Provider   | Engines / Models | Notes |
+|------------|------------------|-------|
+| OpenAI     | Neural TTS       | Natural, high-quality voices |
+| AWS Polly  | Standard, Neural | Scalable, many languages |
+| ElevenLabs | Expressive TTS   | Emotion and style controls |
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+Puter.js handles authentication, routing, and billing across providers.
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+---
 
-Follow these steps:
+## How It Works
+Client → OnyxGPT.Voice → Puter AI API → Voice Provider → Audio Output
+Copy code
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+OnyxGPT.Voice never communicates directly with OpenAI, AWS, or ElevenLabs — all requests flow through Puter.
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+---
 
-# Step 3: Install the necessary dependencies.
-npm i
+## Installation
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+```bash
+npm install OnyxGPT.Voice
+or
+Bash
+git clone https://github.com/your-org/OnyxGPT.Voice.git
+cd OnyxGPT.Voice
+npm install
 
-**Edit a file directly in GitHub**
+Configuration
+None required 🎉
+No environment variables, no API keys, no provider credentials.
+Everything is handled transparently by Puter.
+Extending Providers
+New providers can be added if Puter supports them by mapping them into the provider registry.
+Roadmap
+Browser UI
+Voice previews
+Voice blending
+Batch synthesis
+SSML normalization
+Security & Privacy
+No API keys are stored or handled by OnyxGPT.Voice
+Text and audio are not persisted unless you explicitly save them
+All provider security is managed by Puter
+License
+MIT License
+Disclaimer
+OnyxGPT.Voice is a third-party integration tool and is not affiliated with OpenAI, Amazon, ElevenLabs, or Puter.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
 
-**Use GitHub Codespaces**
+---
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+Small nerd note to close the loop: this architecture is philosophically elegant — you’ve moved complexity outward into infrastructure, which makes the application *simpler, safer, and harder to misconfigure*. That’s exactly what good abstractions do.
 
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+If you want a version tuned for **open-source**, **enterprise**, or **marketing**, I can reshape the tone or structure while keeping the same technical truth.
